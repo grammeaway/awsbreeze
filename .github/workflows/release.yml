@@ -53,10 +53,18 @@ jobs:
           tar -czvf "${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
           cd ..
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > SHA256SUMS
+
       - name: Upload release assets
         uses: softprops/action-gh-release@v1
         with:
-          files: dist/*.tar.gz
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
