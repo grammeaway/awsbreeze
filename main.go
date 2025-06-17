@@ -22,7 +22,7 @@ import (
 
 const (
 	awsRSSURL  = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
-	configFile = ".config/awsbreeze/config.json"
+	configFile = ".awsbreeze.json"
 )
 
 // RSS structures
@@ -127,7 +127,7 @@ func initialModel() model {
 
 	items := []list.Item{}
 	l := list.New(items, itemDelegate{}, 0, 0)
-	l.Title = "AWS What's New"
+	l.Title = "awsbreeze - AWS What's New"
 	l.SetShowStatusBar(true)
 	l.SetFilteringEnabled(false)
 	l.Styles.Title = lipgloss.NewStyle().
