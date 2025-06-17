@@ -61,6 +61,7 @@ jobs:
       - name: Upload release assets
         uses: softprops/action-gh-release@v1
         with:
+          fail_on_unmatched_files: false
           files: |
             dist/*.tar.gz
             dist/SHA256SUMS
