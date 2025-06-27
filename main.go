@@ -504,7 +504,7 @@ func moveAndCleanupOldCache() {
 	}
 	newCachePath := filepath.Join(newCacheDir, cacheFileName)
 	if _, err := os.Stat(oldCachePath); os.IsNotExist(err) {
-		return // Old cache file doesn't exist
+		return // Old cache file doesn't exist, nothing to do
 	}
 
 	// Ensure the cache directory exists
