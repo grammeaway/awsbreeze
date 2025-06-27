@@ -23,6 +23,7 @@ import (
 const (
 	awsRSSURL  = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
 	cacheFileName = "awsbreeze/seen.json"
+	oldCacheFileName = ".awsbreeze.json"
 )
 
 // RSS structures
@@ -420,6 +421,15 @@ Controls:
 }
 
 func loadConfig() Config {
+	if !cacheDirExists() {
+		if err := createCacheDir(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating cache directory: %v\n", err)
+			return Config{LastSeen: make(map[string]bool)}
+		}
+	}
+	if oldCacheExists() {
+		moveAndCleanupOldCache()
+	}
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
@@ -444,6 +454,85 @@ func loadConfig() Config {
 	return config
 }
 
+func cacheDirExists() bool {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return false
+	}
+	
+	// Check if the cache directory exists
+	_, err = os.Stat(filepath.Join(cacheDir, "awsbreeze"))
+	return !os.IsNotExist(err)
+}
+
+func oldCacheExists() bool {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	oldCachePath := filepath.Join(homeDir, oldCacheFileName)
+	_, err = os.Stat(oldCachePath)
+	return !os.IsNotExist(err)
+}
+
+func createCacheDir() error {
+	// Check if the cache directory exists
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return err
+	}
+
+	// Create the cache directory if it doesn't exist
+	if _, err := os.Stat(filepath.Join(cacheDir, "awsbreeze")); os.IsNotExist(err) {
+		err = os.MkdirAll(filepath.Join(cacheDir, "awsbreeze"), os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create cache directory: %w", err)
+		}
+	}
+	return nil
+}
+
+func moveAndCleanupOldCache() {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	oldCachePath := filepath.Join(homeDir, oldCacheFileName)
+	newCacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return
+	}
+	newCachePath := filepath.Join(newCacheDir, cacheFileName)
+	if _, err := os.Stat(oldCachePath); os.IsNotExist(err) {
+		return // Old cache file doesn't exist
+	}
+
+	// Ensure the cache directory exists
+	err = createCacheDir()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating cache directory: %v\n", err)
+		return
+	}
+	// Move old cache file to new location
+	err = os.Rename(oldCachePath, newCachePath)
+	if err != nil {
+		if os.IsExist(err) {
+			// If the new cache file already exists, we can ignore the error
+			return
+		}
+		fmt.Fprintf(os.Stderr, "Error moving old cache file: %v\n", err)
+		return
+	}
+	// Remove the old cache file if it exists
+	if _, err := os.Stat(oldCachePath); err == nil {
+		err = os.Remove(oldCachePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error removing old cache file: %v\n", err)
+		}
+	}
+
+	return
+}
 func openURL(url string) tea.Cmd {
 	return func() tea.Msg {
 		var cmd *exec.Cmd
