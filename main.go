@@ -22,7 +22,7 @@ import (
 
 const (
 	awsRSSURL  = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
-	configFile = ".awsbreeze.json"
+	cacheFileName = "awsbreeze/seen.json"
 )
 
 // RSS structures
@@ -341,12 +341,12 @@ func (m *model) saveConfig() {
 	// Clean up old entries to keep config file lightweight
 	m.cleanupConfig()
 	
-	homeDir, err := os.UserHomeDir()
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return
 	}
 	
-	configPath := filepath.Join(homeDir, configFile)
+	configPath := filepath.Join(cacheDir, cacheFileName)
 	data, err := json.Marshal(m.config)
 	if err != nil {
 		return
@@ -420,13 +420,13 @@ Controls:
 }
 
 func loadConfig() Config {
-	homeDir, err := os.UserHomeDir()
+	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
 	}
 	
-	configPath := filepath.Join(homeDir, configFile)
-	data, err := os.ReadFile(configPath)
+	cachePath := filepath.Join(cacheDir, cacheFileName)
+	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
 	}
