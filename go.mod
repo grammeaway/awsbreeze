@@ -1,4 +1,4 @@
-module awsbreeze
+module github.com/grammeaway/awsbreeze
 
 go 1.24.4
 
