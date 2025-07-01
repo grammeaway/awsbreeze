@@ -6,11 +6,11 @@ on:
       - 'v*'
 
 permissions:
-  contents: write  
+  contents: write
 
 jobs:
   build:
-    name: Cross-compile and upload release artifacts
+    name: Cross-compile ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
 
     strategy:
@@ -21,6 +21,9 @@ jobs:
           - goos: windows
             goarch: arm64
 
+    outputs:
+      matrix: ${{ toJson(matrix) }}
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -30,9 +33,6 @@ jobs:
         with:
           go-version: '1.24'
 
-      - name: Prepare output directory
-        run: mkdir -p dist
-
       - name: Build binary and archive
         run: |
           NAME="awsbreeze"
@@ -40,33 +40,47 @@ jobs:
           if [ "${{ matrix.goos }}" = "windows" ]; then EXT=".exe"; fi
 
           BIN_NAME="${NAME}${EXT}"
-          OUTPUT_DIR="dist/${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          OUTPUT_DIR="${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir -p "$OUTPUT_DIR"
 
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o "$OUTPUT_DIR/$BIN_NAME" .
 
           cp LICENSE "$OUTPUT_DIR/"
           cp README.md "$OUTPUT_DIR/"
-          
-          # Archive
-          cd dist
-          tar -czvf "${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}.tar.gz" "${NAME}-${{ matrix.goos }}-${{ matrix.goarch }}"
-          cd ..
+
+          tar -czvf "${OUTPUT_DIR}.tar.gz" "$OUTPUT_DIR"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            *.tar.gz
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
 
       - name: Generate SHA256 checksums
         run: |
           cd dist
-          sha256sum *.tar.gz > SHA256SUMS
+          find . -name '*.tar.gz' -exec sha256sum {} \; > SHA256SUMS
 
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
           fail_on_unmatched_files: false
-          overwrite_files: true
+          overwrite: true
           files: |
-            dist/*.tar.gz
+            dist/**/*.tar.gz
             dist/SHA256SUMS
-
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
