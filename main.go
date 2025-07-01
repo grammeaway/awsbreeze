@@ -339,7 +339,6 @@ func parseDays(input string) int {
 func (m *model) saveConfig() {
 	m.config.LastRun = time.Now()
 	
-	// Clean up old entries to keep config file lightweight
 	m.cleanupConfig()
 	
 	cacheDir, err := os.UserCacheDir()
@@ -412,7 +411,7 @@ Controls:
   h           - Toggle this help
   q           - Quit
 
-● Green dots indicate new items since last run
+● Green dots indicate new items since last time you opened awsbreeze.
 `
 		statusLine = help
 	}
