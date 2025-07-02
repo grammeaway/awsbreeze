@@ -26,6 +26,12 @@ const (
 	oldCacheFileName = ".awsbreeze.json"
 )
 
+var (
+	version   = "nightly"
+	commit    = "unknown"
+	date      = "unknown"
+)
+
 // RSS structures
 type RSS struct {
 	Channel Channel `xml:"channel"`
@@ -593,6 +599,11 @@ func parseAWSDate(dateStr string) time.Time {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Printf("awsbreeze version: %s\ncommit: %s\nbuilt at: %s\n", version, commit, date)
+		return
+	}
+
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error: %v", err)
