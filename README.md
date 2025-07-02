@@ -26,6 +26,13 @@ If you want to try the latest features and bug fixes, you can install the nightl
 go install github.com/grammeaway/awsbreeze@main
 ```
 
+## Verifying the installation
+After installing, you can verify that `awsbreeze` is installed correctly by running the following command in your terminal:
+
+```bash
+awsbreeze version
+```
+
 ## Config 
 awsbreeze stores its recently-read articles, in a cache file called `seen.json` in the user's cache directory. The config file is automatically created when you run the program for the first time. The program used to read the config from a file in the user's home directory, but this was changed to use the cache directory as of v0.0.4, to avoid cluttering the home directory with configuration files. For this reason, on launch, the program will check if the previous config file exists in the home directory, and if so, it will move it to the cache directory.
 
