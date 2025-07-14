@@ -52,7 +52,6 @@ type Item struct {
 // Application state
 type Config struct {
 	LastSeen map[string]bool `json:"last_seen"`
-	LastRun  time.Time       `json:"last_run"`
 }
 
 type NewsItem struct {
@@ -209,7 +208,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Mark new items
 		for i := range m.items {
 			_, seen := m.config.LastSeen[m.items[i].GUID]
-			m.items[i].IsNew = !seen && m.items[i].PubDate.After(m.config.LastRun)
+			m.items[i].IsNew = !seen 
 		}
 		
 		m.applyFilters()
@@ -343,8 +342,6 @@ func parseDays(input string) int {
 }
 
 func (m *model) saveConfig() {
-	m.config.LastRun = time.Now()
-	
 	m.cleanupConfig()
 	
 	cacheDir, err := os.UserCacheDir()
