@@ -535,9 +535,22 @@ func moveAndCleanupOldCache() {
 
 	return
 }
+
+// For some reason, some of the URLs from the feed, are missing a '/' between .com and the rest of the URL.
+func sanitizeURL(url string) string { 
+	faultyPattern := ".comabout-aws"
+	if strings.Contains(url, faultyPattern) {
+		// Insert a '/' after '.com'
+		url = strings.Replace(url, faultyPattern, ".com/about-aws", 1)
+	}
+	return url
+
+}
+
 func openURL(url string) tea.Cmd {
 	return func() tea.Msg {
 		var cmd *exec.Cmd
+		url = sanitizeURL(url) // Sanitize the URL before opening
 		switch runtime.GOOS {
 		case "linux":
 			cmd = exec.Command("xdg-open", url)
