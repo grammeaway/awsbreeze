@@ -1,6 +1,8 @@
 # awsbreeze 
 An AWS news feed that doesn't blow. 
 
+![awsbreeze preview](./docs/preview.png)
+
 awsbreeze is a TUI for reading the latest AWS news, without having to interact with the official "What's New" page. News are fetched from the AWS news RSS feed, and headlines are displayed in a format thats's easy to get an overview of. Read the full article in your browser with a single keypress. 
 
 Built using Golang, and the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework.
