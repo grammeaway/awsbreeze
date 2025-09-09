@@ -327,6 +327,9 @@ func (m *model) markAllAsSeen() {
 		m.config.LastSeen[m.items[i].GUID] = true
 		m.items[i].IsNew = false
 	}
+
+	// Save config immediately
+	m.saveConfig()
 }
 
 func parseDays(input string) int {
