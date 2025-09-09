@@ -41,7 +41,6 @@ awsbreeze stores its recently-read articles, in a cache file called `seen.json` 
 ## Roadmap
 If time permits, I plan to add the following features:
 
-- [ ] Read the full article in the TUI
 - [ ] Bookmark/save articles
 
 
