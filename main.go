@@ -21,15 +21,16 @@ import (
 )
 
 const (
-	awsRSSURL  = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
-	cacheFileName = "awsbreeze/seen.json"
+	awsRSSURL        = "https://aws.amazon.com/about-aws/whats-new/recent/feed/"
+	cacheFileName    = "awsbreeze/seen.json"
 	oldCacheFileName = ".awsbreeze.json"
+	bookmarksFileName = "awsbreeze/bookmarks.json"
 )
 
 var (
-	version   = "nightly"
-	commit    = "unknown"
-	date      = "unknown"
+	version = "nightly"
+	commit  = "unknown"
+	date    = "unknown"
 )
 
 // RSS structures
@@ -54,13 +55,25 @@ type Config struct {
 	LastSeen map[string]bool `json:"last_seen"`
 }
 
+// Bookmarks file structure
+type BookmarksFile struct {
+	Bookmarks map[string]BookmarkEntry `json:"bookmarks"`
+}
+
+type BookmarkEntry struct {
+	Title   string    `json:"title"`
+	Link    string    `json:"link"`
+	AddedAt time.Time `json:"added_at"`
+}
+
 type NewsItem struct {
-	Title       string
-	Link        string
-	Description string
-	PubDate     time.Time
-	GUID        string
-	IsNew       bool
+	Title        string
+	Link         string
+	Description  string
+	PubDate      time.Time
+	GUID         string
+	IsNew        bool
+	IsBookmarked bool
 }
 
 func (i NewsItem) FilterValue() string { return i.Title }
@@ -79,15 +92,27 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 	var title, desc string
 	isSelected := index == m.Index()
 
-	titleStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-	dateStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	newStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	titleStyle   := lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	descStyle    := lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	dateStyle    := lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
+	newStyle     := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+	bookmarkStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("11")).Bold(true)
 
-	if i.IsNew {
+	prefix := ""
+	if i.IsNew && i.IsBookmarked {
+		prefix = newStyle.Render("● ") + bookmarkStyle.Render("★ ")
+		title = titleStyle.Render(i.Title)
+	} else if i.IsNew {
 		title = newStyle.Render("● " + i.Title)
+	} else if i.IsBookmarked {
+		prefix = bookmarkStyle.Render("★ ")
+		title = titleStyle.Render(i.Title)
 	} else {
 		title = titleStyle.Render(i.Title)
+	}
+
+	if prefix != "" {
+		title = prefix + title
 	}
 
 	desc = descStyle.Render(strings.TrimSpace(stripHTML(i.Description)))
@@ -102,7 +127,6 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 			Background(lipgloss.Color("62")).
 			Foreground(lipgloss.Color("15")).
 			Padding(0, 1)
-		
 		fmt.Fprint(w, selectedStyle.Render(fmt.Sprintf("%s\n%s\n%s", title, desc, date)))
 	} else {
 		fmt.Fprintf(w, "%s\n%s\n%s", title, desc, date)
@@ -110,23 +134,26 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 type model struct {
-	list        list.Model
-	items       []NewsItem
-	config      Config
-	loading     bool
-	err         error
-	filterInput textinput.Model
-	filtering   bool
-	filterDays  int
-	showHelp    bool
+	list          list.Model
+	items         []NewsItem
+	config        Config
+	bookmarks     BookmarksFile
+	loading       bool
+	err           error
+	filterInput   textinput.Model
+	filtering     bool
+	filterDays    int
+	showBookmarks bool
+	showHelp      bool
 }
 
 type fetchedMsg []NewsItem
 type errMsg error
 
 func initialModel() model {
-	config := loadConfig()
-	
+	config    := loadConfig()
+	bookmarks := loadBookmarks()
+
 	filterInput := textinput.New()
 	filterInput.Placeholder = "Enter number of days (e.g., 7)"
 	filterInput.Width = 20
@@ -145,6 +172,7 @@ func initialModel() model {
 	return model{
 		list:        l,
 		config:      config,
+		bookmarks:   bookmarks,
 		loading:     true,
 		filterInput: filterInput,
 		filterDays:  0,
@@ -176,7 +204,6 @@ func fetchNews() tea.Msg {
 	var items []NewsItem
 	for _, item := range rss.Channel.Items {
 		pubDate := parseAWSDate(item.PubDate)
-
 		items = append(items, NewsItem{
 			Title:       item.Title,
 			Link:        item.Link,
@@ -204,13 +231,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fetchedMsg:
 		m.loading = false
 		m.items = []NewsItem(msg)
-		
-		// Mark new items
+
 		for i := range m.items {
 			_, seen := m.config.LastSeen[m.items[i].GUID]
-			m.items[i].IsNew = !seen 
+			m.items[i].IsNew = !seen
+			_, bookmarked := m.bookmarks.Bookmarks[m.items[i].GUID]
+			m.items[i].IsBookmarked = bookmarked
 		}
-		
+
 		m.applyFilters()
 		return m, nil
 
@@ -249,6 +277,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, openURL(selected.Link)
 			}
 
+		case "b":
+			if len(m.list.Items()) > 0 {
+				selected := m.list.SelectedItem().(NewsItem)
+				m.toggleBookmark(selected.GUID)
+			}
+			return m, nil
+
+		case "B":
+			m.showBookmarks = !m.showBookmarks
+			m.applyFilters()
+			return m, nil
+
 		case "r":
 			m.loading = true
 			return m, fetchNews
@@ -260,6 +300,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "c":
 			m.filterDays = 0
+			m.showBookmarks = false
 			m.applyFilters()
 			return m, nil
 
@@ -279,10 +320,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m *model) toggleBookmark(guid string) {
+	// Find the item
+	var target *NewsItem
+	for i := range m.items {
+		if m.items[i].GUID == guid {
+			target = &m.items[i]
+			break
+		}
+	}
+	if target == nil {
+		return
+	}
+
+	if target.IsBookmarked {
+		// Remove bookmark
+		delete(m.bookmarks.Bookmarks, guid)
+		target.IsBookmarked = false
+	} else {
+		// Add bookmark
+		if m.bookmarks.Bookmarks == nil {
+			m.bookmarks.Bookmarks = make(map[string]BookmarkEntry)
+		}
+		m.bookmarks.Bookmarks[guid] = BookmarkEntry{
+			Title:   target.Title,
+			Link:    target.Link,
+			AddedAt: time.Now(),
+		}
+		target.IsBookmarked = true
+	}
+
+	saveBookmarks(m.bookmarks)
+	m.applyFilters()
+}
+
 func (m *model) applyFilters() {
 	var filteredItems []list.Item
-	
+
 	for _, item := range m.items {
+		if m.showBookmarks && !item.IsBookmarked {
+			continue
+		}
 		if m.filterDays > 0 {
 			daysDiff := int(time.Since(item.PubDate).Hours() / 24)
 			if daysDiff > m.filterDays {
@@ -291,13 +369,19 @@ func (m *model) applyFilters() {
 		}
 		filteredItems = append(filteredItems, item)
 	}
-	
+
 	m.list.SetItems(filteredItems)
-	
-	// Update title with filter info
+
 	title := "AWS What's New"
+	parts := []string{}
+	if m.showBookmarks {
+		parts = append(parts, "Bookmarks")
+	}
 	if m.filterDays > 0 {
-		title += fmt.Sprintf(" (Last %d days)", m.filterDays)
+		parts = append(parts, fmt.Sprintf("Last %d days", m.filterDays))
+	}
+	if len(parts) > 0 {
+		title += " (" + strings.Join(parts, ", ") + ")"
 	}
 	m.list.Title = title
 }
@@ -336,7 +420,7 @@ func parseDays(input string) int {
 	if input == "" {
 		return 0
 	}
-	
+
 	days, err := strconv.Atoi(input)
 	if err != nil || days < 0 {
 		return 0
@@ -346,18 +430,18 @@ func parseDays(input string) int {
 
 func (m *model) saveConfig() {
 	m.cleanupConfig()
-	
+
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		return
 	}
-	
+
 	configPath := filepath.Join(cacheDir, cacheFileName)
 	data, err := json.Marshal(m.config)
 	if err != nil {
 		return
 	}
-	
+
 	os.WriteFile(configPath, data, 0644)
 }
 
@@ -388,28 +472,30 @@ func (m model) View() string {
 	if m.loading {
 		return "Fetching AWS news...\n\nPress 'q' to quit"
 	}
-	
+
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n\nPress 'r' to retry or 'q' to quit", m.err)
 	}
-	
+
 	view := m.list.View()
-	
+
 	if m.filtering {
 		filterView := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			Padding(1).
 			Render(fmt.Sprintf("Filter by days:\n%s\n\nPress Enter to apply, Esc to cancel", m.filterInput.View()))
-		
+
 		view = lipgloss.JoinVertical(lipgloss.Left, view, filterView)
 	}
-	
+
 	statusLine := "Press 'h' for help"
 	if m.showHelp {
 		help := `
 Controls:
   ↑/↓ or j/k  - Navigate items
   Enter       - Open selected item in browser
+  b           - Toggle bookmark on selected item
+  B           - Toggle bookmarks-only filter
   r           - Refresh news
   f           - Filter by date (days)
   c           - Clear all filters
@@ -418,12 +504,72 @@ Controls:
   q           - Quit
 
 ● Green dots indicate new items since last time you opened awsbreeze.
+★ Yellow stars indicate bookmarked items.
 `
 		statusLine = help
 	}
-	
+
 	return lipgloss.JoinVertical(lipgloss.Left, view, statusLine)
 }
+
+// --- Bookmark persistence ---
+
+func bookmarksFilePath() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cacheDir, bookmarksFileName), nil
+}
+
+func loadBookmarks() BookmarksFile {
+	path, err := bookmarksFilePath()
+	if err != nil {
+		return BookmarksFile{Bookmarks: make(map[string]BookmarkEntry)}
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		// File doesn't exist yet — that's fine, start empty
+		return BookmarksFile{Bookmarks: make(map[string]BookmarkEntry)}
+	}
+
+	var bf BookmarksFile
+	if err := json.Unmarshal(data, &bf); err != nil {
+		return BookmarksFile{Bookmarks: make(map[string]BookmarkEntry)}
+	}
+
+	if bf.Bookmarks == nil {
+		bf.Bookmarks = make(map[string]BookmarkEntry)
+	}
+
+	return bf
+}
+
+func saveBookmarks(bf BookmarksFile) {
+	path, err := bookmarksFilePath()
+	if err != nil {
+		return
+	}
+
+	// Ensure the directory exists (it should already, but be safe)
+	if err := os.MkdirAll(filepath.Dir(path), os.ModePerm); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating bookmarks directory: %v\n", err)
+		return
+	}
+
+	data, err := json.MarshalIndent(bf, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error marshalling bookmarks: %v\n", err)
+		return
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing bookmarks file: %v\n", err)
+	}
+}
+
+// --- Config / cache helpers (unchanged) ---
 
 func loadConfig() Config {
 	if !cacheDirExists() {
@@ -439,23 +585,23 @@ func loadConfig() Config {
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
 	}
-	
+
 	cachePath := filepath.Join(cacheDir, cacheFileName)
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
 	}
-	
+
 	var config Config
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return Config{LastSeen: make(map[string]bool)}
 	}
-	
+
 	if config.LastSeen == nil {
 		config.LastSeen = make(map[string]bool)
 	}
-	
+
 	return config
 }
 
