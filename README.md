@@ -3,7 +3,7 @@ An AWS news feed that doesn't blow.
 
 ![awsbreeze preview](./docs/preview.png)
 
-awsbreeze is a TUI for reading the latest AWS news, without having to interact with the official "What's New" page. News are fetched from the AWS news RSS feed, and headlines are displayed in a format thats's easy to get an overview of. Read the full article in your browser with a single keypress. 
+awsbreeze is a TUI for reading the latest AWS news, without having to interact with the official "What's New" page. News are fetched from the AWS news RSS feed, and headlines are displayed in a format thats's easy to get an overview of. Read the full article in your browser with a single keypress. Supports article bookmarks, and keeps track of which articles you've already read.
 
 Built using Golang, and the [Bubble Tea](https://github.com/charmbracelet/bubbletea) framework.
 
@@ -37,11 +37,6 @@ awsbreeze version
 
 ## Config 
 awsbreeze stores its recently-read articles, in a cache file called `seen.json` in the user's cache directory. The config file is automatically created when you run the program for the first time. The program used to read the config from a file in the user's home directory, but this was changed to use the cache directory as of v0.0.4, to avoid cluttering the home directory with configuration files. For this reason, on launch, the program will check if the previous config file exists in the home directory, and if so, it will move it to the cache directory.
-
-## Roadmap
-If time permits, I plan to add the following features:
-
-- [ ] Bookmark/save articles
 
 
 ## Contributing
